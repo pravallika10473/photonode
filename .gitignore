@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+# Model & Data
+/model_output/
+/inference_results/
+*.pth
+*.pt
+*.ckpt
+*.bin
+
+# Output
+/output/
+*.jpg
+*.png
+*.jpeg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+outputs/model_output/
+outputs/model_output/
+*.safetensors

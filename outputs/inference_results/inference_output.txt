@@ -1,0 +1,14 @@
+Using device: cuda
+Starting inference on /uufs/chpc.utah.edu/common/home/u1475870/photonode/test_images/image.png
+Loading image from /uufs/chpc.utah.edu/common/home/u1475870/photonode/test_images/image.png
+Image loaded successfully: size=(800, 533), mode=RGB
+Looking for checkpoints in: /scratch/general/vast/u1475870/photonode/model_output
+Found checkpoints: ['/scratch/general/vast/u1475870/photonode/model_output/checkpoint-1200', '/scratch/general/vast/u1475870/photonode/model_output/checkpoint-1250']
+Using latest checkpoint: /scratch/general/vast/u1475870/photonode/model_output/checkpoint-1250
+Loading model from /scratch/general/vast/u1475870/photonode/model_output/checkpoint-1250
+Image processor loaded successfully
+Model loaded successfully and moved to device: cuda
+Running inference...
+Drawing results...
+Results saved to /scratch/general/vast/u1475870/photonode/inference_results/detection_result.jpg
+Inference completed successfully
