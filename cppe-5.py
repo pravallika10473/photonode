@@ -12,10 +12,10 @@ from PIL import ImageDraw,Image
 
 login(token="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")
 
-credentials = load_dataset("pravallika6/credentials")
-# remove_idx = [590, 821, 822, 875, 876, 878, 879]
-# keep = [i for i in range(len(cppe5["train"])) if i not in remove_idx]
-# cppe5["train"] = cppe5["train"].select(keep)
+cppe5 = load_dataset("cppe-5")
+remove_idx = [590, 821, 822, 875, 876, 878, 879]
+keep = [i for i in range(len(cppe5["train"])) if i not in remove_idx]
+cppe5["train"] = cppe5["train"].select(keep)
 
 checkpoint = "facebook/detr-resnet-50"
 image_processor = AutoImageProcessor.from_pretrained(checkpoint)
@@ -27,7 +27,7 @@ transform = albumentations.Compose(
     ],
     bbox_params=albumentations.BboxParams(format="coco", label_fields=["category"]),
 )
-categories = ["credential"]
+categories = cppe5["train"].features["objects"].feature["category"].names
 
 id2label = {index: x for index, x in enumerate(categories, start=0)}
 label2id = {v: k for k, v in id2label.items()}
@@ -66,15 +66,7 @@ def transform_aug_ann(examples):
 
     return image_processor(images=images, annotations=targets, return_tensors="pt")
 
-def preprocess_dataset(dataset):
-    def clip_bboxes(example):
-        example["objects"]["bbox"] = np.clip(example["objects"]["bbox"], 0, 1)
-        return example
-    
-    return dataset.map(clip_bboxes)
-
-# Use it before training
-credentials["train"] = preprocess_dataset(credentials["train"])
+cppe5["train"] = cppe5["train"].with_transform(transform_aug_ann)
 
 def collate_fn(batch):
     pixel_values = [item["pixel_values"] for item in batch]
@@ -109,11 +101,10 @@ trainer = Trainer(
     model=model,
     args=training_args,
     data_collator=collate_fn,
-    train_dataset=credentials["train"],
+    train_dataset=cppe5["train"],
     tokenizer=image_processor,
 )
 
 trainer.train()
-trainer.push_to_hub("pravallika6/detr-resnet-50_finetuned_credentials")
+trainer.push_to_hub("pravallika6/detr-resnet-50_finetuned_cppe-5")
 print("Model successfully trained")
-
