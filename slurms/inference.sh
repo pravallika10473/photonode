@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --account=soc-gpu-kp
-#SBATCH --partition=soc-gpu-kp
+#SBATCH --account=soc-gpu-np
+#SBATCH --partition=soc-gpu-np
 #SBATCH --job-name=object_detection_inference
 #SBATCH --time=1:00:00
 #SBATCH --ntasks=1

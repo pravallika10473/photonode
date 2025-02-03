@@ -4,4 +4,8 @@ evaluate
 timm 
 albumentations
 requests
+transformers[torch] 
+wandb 
+torchmetrics 
+matplotlib 
 
