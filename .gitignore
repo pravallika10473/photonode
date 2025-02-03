@@ -12,11 +12,15 @@ venv/
 *.ckpt
 *.bin
 
+test_images/
+
 # Output
 /output/
 *.jpg
 *.png
 *.jpeg
+
+outputs/
 
 # IDE
 .vscode/
