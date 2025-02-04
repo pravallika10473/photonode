@@ -8,4 +8,6 @@ transformers[torch]
 wandb 
 torchmetrics 
 matplotlib 
+pytorch-lightning
+coco-eval
 

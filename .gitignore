@@ -21,6 +21,7 @@ test_images/
 *.jpeg
 
 outputs/
+train/
 
 # IDE
 .vscode/

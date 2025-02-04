@@ -3,7 +3,7 @@
 #SBATCH --partition=soc-gpu-np
 #SBATCH --job-name=object_detection
 #SBATCH --time=12:00:00
-#SBATCH --ntasks=8
+#SBATCH --ntasks-per-node=8
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:1
 #SBATCH --output=/scratch/general/vast/u1475870/photonode/logs/%j/%j_training.out
