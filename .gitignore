@@ -31,3 +31,7 @@ train/
 outputs/model_output/
 outputs/model_output/
 *.safetensors
+
+combined_dataset/
+outputs/inference_results/
+outputs/iou_results/

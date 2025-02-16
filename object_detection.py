@@ -12,13 +12,14 @@ import torch
 from pytorch_lightning import Trainer
 from huggingface_hub import login
 from torchvision.ops import box_convert
+from pytorch_lightning.callbacks import EarlyStopping
 
-login(token="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")
+login(token="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")
 
 
 class CocoDetection(torchvision.datasets.CocoDetection):
     def __init__(self, img_folder, processor, train=True):
-        ann_file = os.path.join(img_folder, "train.json" if train else "val.json")
+        ann_file = os.path.join(img_folder, "result.json" if train else "result.json")
         super(CocoDetection, self).__init__(img_folder, ann_file)
         self.processor = processor
 
@@ -38,8 +39,8 @@ class CocoDetection(torchvision.datasets.CocoDetection):
     
 processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-50")
 
-train_dataset = CocoDetection(img_folder='/uufs/chpc.utah.edu/common/home/u1475870/photonode/train', processor=processor)
-val_dataset = CocoDetection(img_folder='/uufs/chpc.utah.edu/common/home/u1475870/photonode/train', processor=processor, train=False)
+train_dataset = CocoDetection(img_folder='/uufs/chpc.utah.edu/common/home/u1475870/photonode/combined_dataset/train', processor=processor)
+val_dataset = CocoDetection(img_folder='/uufs/chpc.utah.edu/common/home/u1475870/photonode/combined_dataset/val', processor=processor, train=False)
      
 
 print("Number of training examples:", len(train_dataset))
@@ -138,8 +139,23 @@ model = Detr(lr=1e-4, lr_backbone=1e-5, weight_decay=1e-4)
 outputs = model(pixel_values=batch['pixel_values'], pixel_mask=batch['pixel_mask'])
 
 print(outputs.logits.shape)
-trainer = Trainer(max_steps=300, gradient_clip_val=0.1)
+
+# Create early stopping callback
+early_stopping = EarlyStopping(
+    monitor='validation_loss',
+    patience=10,
+    min_delta=0.001,
+    mode='min',
+    verbose=True
+)
+
+trainer = Trainer(
+    max_epochs=75, 
+    gradient_clip_val=0.1,
+    callbacks=[early_stopping]
+)
+
 trainer.fit(model)
-model.model.push_to_hub("Pravallika6/detr-resnet-50-finetuned-credentials")
-processor.push_to_hub("Pravallika6/detr-resnet-50-finetuned-credentials")
+model.model.push_to_hub("Pravallika6/detr-finetuned-credentials")
+processor.push_to_hub("Pravallika6/detr-finetuned-credentials")
 

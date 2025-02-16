@@ -6,8 +6,8 @@ from object_detection import val_dataset, val_dataloader
 from transformers import AutoImageProcessor, AutoModelForObjectDetection
 
 
-processor = AutoImageProcessor.from_pretrained("Pravallika6/detr-resnet-50-finetuned-credentials")
-model = AutoModelForObjectDetection.from_pretrained("Pravallika6/detr-resnet-50-finetuned-credentials")
+processor = AutoImageProcessor.from_pretrained("Pravallika6/detr-finetuned-credentials")
+model = AutoModelForObjectDetection.from_pretrained("Pravallika6/detr-finetuned-credentials")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 

@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 import tqdm
 
 # Set up model and processor
-processor = AutoImageProcessor.from_pretrained("Pravallika6/detr-resnet-50-finetuned-credentials")
-model = AutoModelForObjectDetection.from_pretrained("Pravallika6/detr-resnet-50-finetuned-credentials")
+processor = AutoImageProcessor.from_pretrained("Pravallika6/detr-finetuned-credentials")
+model = AutoModelForObjectDetection.from_pretrained("Pravallika6/detr-finetuned-credentials")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 
@@ -58,7 +58,7 @@ def process_image(pixel_values, image, image_id):
 
     # Get probabilities from logits
     probas = outputs.logits.softmax(-1)[0, :, :-1]
-    keep = probas.max(-1).values > 0.5  # Adjust threshold as needed
+    keep = probas.max(-1).values > 0.65  # Adjust threshold as needed
 
     # Get predictions
     pred_boxes = outputs.pred_boxes[0, keep]
@@ -95,7 +95,7 @@ def main():
         
         # Load original image
         image_info = val_dataset.coco.loadImgs(image_id)[0]
-        image_path = os.path.join('/uufs/chpc.utah.edu/common/home/u1475870/photonode/train', image_info['file_name'])
+        image_path = os.path.join('/uufs/chpc.utah.edu/common/home/u1475870/photonode/combined_dataset/val', image_info['file_name'])
         image = Image.open(image_path)
         
         # Process image
