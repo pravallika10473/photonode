@@ -58,7 +58,7 @@ def collate_fn(batch):
   return batch
 
 train_dataloader = DataLoader(train_dataset, collate_fn=collate_fn, batch_size=4, shuffle=True)
-val_dataloader = DataLoader(val_dataset, collate_fn=collate_fn, batch_size=2)
+val_dataloader = DataLoader(val_dataset, collate_fn=collate_fn, batch_size=4)
 
 batch = next(iter(train_dataloader))
 
@@ -150,7 +150,7 @@ early_stopping = EarlyStopping(
 )
 
 trainer = Trainer(
-    max_epochs=75, 
+    max_epochs=20, 
     gradient_clip_val=0.1,
     callbacks=[early_stopping]
 )
@@ -158,4 +158,3 @@ trainer = Trainer(
 trainer.fit(model)
 model.model.push_to_hub("Pravallika6/detr-finetuned-credentials")
 processor.push_to_hub("Pravallika6/detr-finetuned-credentials")
-

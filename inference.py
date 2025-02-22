@@ -1,112 +1,182 @@
-import requests
-from transformers import pipeline
-import numpy as np
-from PIL import Image, ImageDraw
-from torchvision.ops import box_convert
-# Use a pipeline as a high-level helper
-# Load model directly
-from transformers import AutoImageProcessor, AutoModelForObjectDetection
-from object_detection import val_dataset
 import torch
-import os
+from transformers import AutoImageProcessor, AutoModelForObjectDetection
+from PIL import Image
 import matplotlib.pyplot as plt
-import tqdm
+import os
+import json
+from tqdm import tqdm
+from torchvision.ops import box_convert
 
-# Set up model and processor
-processor = AutoImageProcessor.from_pretrained("Pravallika6/detr-finetuned-credentials")
+# Set up model and processor with use_fast=True
+processor = AutoImageProcessor.from_pretrained("Pravallika6/detr-finetuned-credentials", use_fast=True)
 model = AutoModelForObjectDetection.from_pretrained("Pravallika6/detr-finetuned-credentials")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 
+# Set model to evaluation mode
+model.eval()
+
 # Colors for visualization
-COLORS = [[0.000, 0.447, 0.741], [0.850, 0.325, 0.098], [0.929, 0.694, 0.125],
-          [0.494, 0.184, 0.556], [0.466, 0.674, 0.188], [0.301, 0.745, 0.933]]
+PRED_COLOR = 'red'  # Color for predicted boxes
+GT_COLOR = 'lime'   # Color for ground truth boxes
 
-id2label = {
-    0: "credential",
-}
-
-def plot_results(pil_img, scores, labels, boxes, output_path):
+def plot_results(pil_img, pred_scores, pred_boxes, gt_boxes, output_path):
     plt.figure(figsize=(16,10))
     plt.imshow(pil_img)
     ax = plt.gca()
     
-    colors = COLORS * 100
-    for score, label, box, c in zip(scores.tolist(), labels.tolist(), boxes.tolist(), colors):
-        # Draw the bounding box
-        x1, y1, x2, y2 = box
-        rect = plt.Rectangle((x1, y1), x2 - x1, y2 - y1,
-                           fill=False, color=c, linewidth=3)
-        ax.add_patch(rect)
-        
-        # Add label and score
-        text = f'{id2label[label]}: {score:0.2f}'
-        ax.text(x1, y1 - 5, text, fontsize=15,
-                bbox=dict(facecolor='white', alpha=0.8, edgecolor=c))
+    # Plot ground truth boxes in green
+    if gt_boxes is not None:
+        for box in gt_boxes:
+            # Ground truth box
+            ax.add_patch(plt.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1],
+                        fill=False, color=GT_COLOR, linewidth=2))
+            # Add "GT" label
+            ax.text(box[0], box[1] - 10, 'GT', fontsize=12,
+                   bbox=dict(facecolor=GT_COLOR, alpha=0.5), color='black')
+    
+    # Plot predicted boxes in red with confidence scores
+    for score, box in zip(pred_scores, pred_boxes):
+        box = box.tolist()
+        # Predicted box
+        ax.add_patch(plt.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1],
+                    fill=False, color=PRED_COLOR, linewidth=2))
+        # Add confidence score with "Pred" label
+        text = f'Pred:{score:0.2f}'
+        ax.text(box[0], box[1] - 5, text, fontsize=12,
+                bbox=dict(facecolor='white', alpha=0.8, edgecolor=PRED_COLOR),
+                color='red')
     
     plt.axis('off')
-    plt.savefig(output_path, bbox_inches='tight', dpi=300)
+    plt.savefig(output_path, bbox_inches='tight', pad_inches=0, dpi=300)
     plt.close()
 
-def process_image(pixel_values, image, image_id):
-    # Move to device and add batch dimension
-    pixel_values = pixel_values.unsqueeze(0).to(device)
-
-    # Get predictions
+def process_image(image_path):
+    # Load and process image
+    image = Image.open(image_path)
+    inputs = processor(images=image, return_tensors="pt")
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+    
+    # Run inference
     with torch.no_grad():
-        outputs = model(pixel_values=pixel_values, pixel_mask=None)
-
-    # Get probabilities from logits
+        outputs = model(**inputs)
+        
+    # Convert outputs to numpy
     probas = outputs.logits.softmax(-1)[0, :, :-1]
-    keep = probas.max(-1).values > 0.65  # Adjust threshold as needed
-
-    # Get predictions
-    pred_boxes = outputs.pred_boxes[0, keep]
-    scores = probas[keep].max(-1).values
-    labels = probas[keep].argmax(-1)
-
-    # Convert boxes to image size
-    h, w = image.size[1], image.size[0]
-    pred_boxes = pred_boxes.cpu() * torch.Tensor([w, h, w, h])
-    pred_boxes = box_convert(pred_boxes, in_fmt='cxcywh', out_fmt='xyxy')
-
-    # Create output directory if it doesn't exist
-    output_dir = '/uufs/chpc.utah.edu/common/home/u1475870/photonode/predictions'
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Save the visualization
-    output_path = os.path.join(output_dir, f'pred_{image_id}.png')
-    plot_results(image, scores, labels, pred_boxes, output_path)
-
+    keep = probas.max(-1).values > 0.8  # Confidence threshold
+    
+    # Convert boxes to image coordinates
+    boxes = outputs.pred_boxes[0, keep]
+    probas = probas[keep]
+    
+    # Convert boxes to [x0, y0, x1, y1] format
+    boxes = box_convert(boxes, in_fmt='cxcywh', out_fmt='xyxy')
+    
+    # Scale boxes to image size
+    w, h = image.size
+    boxes = boxes * torch.tensor([w, h, w, h], dtype=torch.float32).to(device)
+    
     return {
-        'image_id': image_id,
-        'num_detections': len(scores),
-        'scores': scores.tolist(),
-        'boxes': pred_boxes.tolist()
+        'image': image,
+        'scores': probas.max(-1).values,
+        'boxes': boxes
     }
 
+def get_ground_truth_boxes(annotations, img_file):
+    """
+    Extract ground truth boxes for a specific image from COCO-style annotations
+    """
+    try:
+        # First find the image_id for the given filename
+        image_id = None
+        for img in annotations['images']:
+            if os.path.basename(img['file_name']) == img_file:
+                image_id = img['id']
+                break
+        
+        if image_id is None:
+            return None
+            
+        # Get all annotations for this image_id
+        boxes = []
+        for ann in annotations['annotations']:
+            if ann['image_id'] == image_id:
+                # bbox format is [x, y, width, height], convert to [x1, y1, x2, y2]
+                bbox = ann['bbox']
+                boxes.append([
+                    bbox[0],                    # x1
+                    bbox[1],                    # y1
+                    bbox[0] + bbox[2],          # x2 = x1 + width
+                    bbox[1] + bbox[3]           # y2 = y1 + height
+                ])
+        
+        return boxes if boxes else None
+    except Exception as e:
+        print(f"Error extracting ground truth boxes: {str(e)}")
+        return None
+
 def main():
-    # Process all validation images
-    results = []
-    for idx in tqdm.tqdm(range(len(val_dataset))):
-        # Get image and target
-        pixel_values, target = val_dataset[idx]
-        image_id = target['image_id'].item()
+    base_dir = '/uufs/chpc.utah.edu/common/home/u1475870/photonode/combined_dataset/val'
+    images_dir = os.path.join(base_dir, 'images')
+    json_path = os.path.join(base_dir, 'result.json')
+    output_dir = '/uufs/chpc.utah.edu/common/home/u1475870/photonode/predictions'
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    if not os.path.exists(images_dir):
+        print(f"Error: Images directory '{images_dir}' does not exist!")
+        return
         
-        # Load original image
-        image_info = val_dataset.coco.loadImgs(image_id)[0]
-        image_path = os.path.join('/uufs/chpc.utah.edu/common/home/u1475870/photonode/combined_dataset/val', image_info['file_name'])
-        image = Image.open(image_path)
+    if not os.path.exists(json_path):
+        print(f"Error: JSON file '{json_path}' does not exist!")
+        return
+
+    # Load JSON file with ground truth annotations
+    try:
+        with open(json_path, 'r') as f:
+            annotations = json.load(f)
+        print(f"Successfully loaded annotations file with {len(annotations['images'])} images and {len(annotations['annotations'])} annotations")
+    except Exception as e:
+        print(f"Error loading JSON file: {str(e)}")
+        return
+
+    # Get list of images
+    image_files = [f for f in os.listdir(images_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    
+    if not image_files:
+        print(f"No image files found in '{images_dir}'")
+        print("Supported formats: .jpg, .jpeg, .png")
+        return
         
-        # Process image
-        result = process_image(pixel_values, image, image_id)
-        results.append(result)
-        
-        print(f"\nProcessed image {image_id}:")
-        print(f"Number of detections: {result['num_detections']}")
-        print(f"Confidence scores: {[f'{s:.2f}' for s in result['scores']]}")
-        print("-" * 50)
+    print(f"Found {len(image_files)} images to process")
+    
+    for img_file in tqdm(image_files, desc="Processing images"):
+        image_path = os.path.join(images_dir, img_file)
+        try:
+            # Get ground truth boxes
+            gt_boxes = get_ground_truth_boxes(annotations, img_file)
+            
+            # Process image
+            result = process_image(image_path)
+            
+            # Save visualization with both predicted and ground truth boxes
+            output_path = os.path.join(output_dir, f'pred_{os.path.splitext(img_file)[0]}.png')
+            plot_results(
+                result['image'],
+                result['scores'],
+                result['boxes'],
+                gt_boxes,
+                output_path
+            )
+            
+            print(f"\nProcessed {img_file}:")
+            print(f"Number of predictions: {len(result['scores'])}")
+            print(f"Confidence scores: {[f'{s:.2f}' for s in result['scores']]}")
+            if gt_boxes:
+                print(f"Number of ground truth boxes: {len(gt_boxes)}")
+            print("-" * 50)
+        except Exception as e:
+            print(f"Error processing {img_file}: {str(e)}")
 
 if __name__ == "__main__":
     main()
-
